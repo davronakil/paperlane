@@ -131,8 +131,9 @@ so their contents stay upright and correctly oriented on rotated pages.
 
 ## Notes and limits
 
-- CMaps and the standard fonts are copied into `public/pdfjs` by a pre-build
-  step, and the "Type" signature tab uses the script faces that ship with macOS,
+- CMaps and the standard fonts are copied into `public/pdfjs` by `npm run
+  assets`, which `dev` and `build` chain explicitly (npm's implicit `pre*`
+  hooks are skipped when `ignore-scripts` is set), and the "Type" signature tab uses the script faces that ship with macOS,
   so nothing is ever fetched over the network.
 - Encrypted PDFs open with a password prompt.
 - Inserting another PDF copies its pages but not its interactive form fields —
