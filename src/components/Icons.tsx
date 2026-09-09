@@ -172,7 +172,6 @@ export const IcChevL = S(<path d="M14.5 5l-7 7 7 7" />);
 export const IcChevR = S(<path d="M9.5 5l7 7-7 7" />);
 export const IcChevD = S(<path d="M5 9.5l7 7 7-7" />);
 export const IcX = S(<path d="M6 6l12 12M18 6L6 18" />);
-export const IcPlus = S(<path d="M12 5v14M5 12h14" />);
 export const IcCheck = S(<path d="M5 12.5l5 5L19 6.5" />);
 export const IcFile = S(
   <>

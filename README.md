@@ -80,15 +80,18 @@ The shell reads a few environment variables, so it can be launched and inspected
 without a human at the keyboard — useful for checking a change actually renders:
 
 ```bash
+npm run app:debug          # PAPERLANE_EVAL needs a debug build
 PAPERLANE_OPEN=~/doc.pdf \
 PAPERLANE_EVAL='return document.querySelectorAll(".field").length' \
 PAPERLANE_SNAPSHOT=/tmp/shot.png PAPERLANE_REPORT=1 PAPERLANE_QUIT=1 \
 build/Paperlane.app/Contents/MacOS/Paperlane
 ```
 
-`PAPERLANE_COMMAND` fires a menu command, `PAPERLANE_DELAY` sets the settle time,
-and `PAPERLANE_INSPECT=1` enables the Web Inspector. They do nothing unless you
-set them.
+`PAPERLANE_COMMAND` fires a menu command and `PAPERLANE_DELAY` sets the settle
+time. They do nothing unless you set them, and each is equivalent to something
+you can do from the menus. `PAPERLANE_EVAL`, which runs arbitrary JavaScript in
+the page, and `PAPERLANE_INSPECT`, which opens the Web Inspector, exist only in
+debug builds — use `npm run app:debug` when you need them.
 
 ## Keyboard
 
@@ -128,6 +131,50 @@ lands in the same spot in the exported file.
 DOM overlays (form fields, text boxes, signatures) live in a `.pdf-space`
 container that is sized to the *unrotated* page and CSS-rotated onto the canvas,
 so their contents stay upright and correctly oriented on rotated pages.
+
+## Security
+
+The app's whole job is to open files that came from somebody else, so the
+interface treats every document as hostile input and keeps its own surface as
+small as it can.
+
+**The page.** A strict `Content-Security-Policy` starts from `default-src
+'none'`: script only from this origin, no inline script anywhere, no external
+loads of any kind, `object-src`, `base-uri` and `form-action` all off. Nothing
+in the app fetches from the network — CMaps, the standard fonts and the
+signature faces are all local — so a document has no route to reach out even if
+it could run something.
+
+**Navigation.** The web view is pinned to the exact loopback origin it was
+launched with. `file://` URLs and custom schemes are refused outright rather
+than handed to the web view or to Launch Services, and an `http(s)` link shows
+you where it goes and waits for you to agree before the browser opens it.
+
+**The local server.** It binds `127.0.0.1` on an ephemeral port, answers only
+`GET` and `HEAD`, and serves nothing but the read-only `web` directory inside
+the app bundle. Every request must carry a random 128-bit path prefix minted at
+launch, and a `Host` header naming that exact port — so another process cannot
+reach it by guessing, and a browser elsewhere on the machine cannot be pointed
+at it by a rebound hostname. Paths are resolved through symlinks before being
+checked for containment, and a connection that never finishes its request is
+dropped after 15 seconds. Verified: `200` for the real entry point, `403` for a
+foreign `Host`, `404` for `../../../../etc/passwd` and for a wrong token.
+
+**No code execution in the shipped app.** The scripting hooks above are limited
+in release builds to things you can already do from the menus — open a file,
+fire a command, take a screenshot, quit. The two that are not — running
+arbitrary JavaScript in the page, and opening the Web Inspector — are compiled
+into debug builds only.
+
+**Your data.** Documents are read into memory and never leave the machine;
+there is no telemetry, no analytics and no update check. Saved signatures are
+the one thing that persists — they live unencrypted in the app's own WebKit
+local storage, and the signature sheet has an × on each one to remove it.
+
+**Not done.** The app does not run under App Sandbox; that would be the next
+meaningful step and mostly means declaring the file access it already gets
+through the open and save panels. The build is ad-hoc signed and not notarised,
+so it runs only on the machine that built it.
 
 ## Notes and limits
 

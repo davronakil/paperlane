@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     private var documentURL: URL?
     /// Most recent file handed to the web app, matched against the title it reports.
     private var lastOpenedURL: URL?
+    /// The one origin the web view is allowed to load.
+    private var entryURL: URL?
     /// Size of the most recent document handed over for saving (diagnostics only).
     private var lastSaveBytes = 0
 
@@ -37,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             return
         }
 
+        entryURL = entry
         buildMenu()
         buildWindow()
         webView.load(URLRequest(url: entry))
@@ -91,9 +94,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsMagnification = false
+        #if DEBUG
         if #available(macOS 13.3, *) {
             webView.isInspectable = ProcessInfo.processInfo.environment["PAPERLANE_INSPECT"] != nil
         }
+        #endif
 
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 860),
@@ -266,17 +271,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                  decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url else {
+            decisionHandler(.cancel)
+            return
+        }
+
+        // Only the interface itself may load here. Pin to the exact origin
+        // rather than any 127.0.0.1 address, and let nothing else through:
+        // documents are untrusted input, and file:// or a custom scheme
+        // reaching the web view or Launch Services is a way out of the app.
+        if let base = entryURL, url.scheme == base.scheme, url.host == base.host,
+           url.port == base.port {
             decisionHandler(.allow)
             return
         }
-        // Keep the app itself in the web view; send anything else to the browser.
-        if url.host == "127.0.0.1" || url.scheme == "about" || url.scheme == "blob" {
+        if url.scheme == "about" || url.scheme == "blob" {
             decisionHandler(.allow)
-        } else if url.scheme == "http" || url.scheme == "https" {
-            NSWorkspace.shared.open(url)
+            return
+        }
+        if url.scheme == "http" || url.scheme == "https" {
             decisionHandler(.cancel)
-        } else {
-            decisionHandler(.allow)
+            confirmExternalOpen(url)
+            return
+        }
+        decisionHandler(.cancel)
+    }
+
+    /// A link can only have come from a document, so never hand one to the
+    /// system without the person seeing where it goes first.
+    private func confirmExternalOpen(_ url: URL) {
+        let alert = NSAlert()
+        alert.messageText = "Open this link in your browser?"
+        alert.informativeText = url.absoluteString
+        alert.addButton(withTitle: "Open")
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: window) { response in
+            if response == .alertFirstButtonReturn { NSWorkspace.shared.open(url) }
         }
     }
 
@@ -310,20 +339,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     // launch the binary yourself with them set:
     //
     //   PAPERLANE_OPEN=<file.pdf>   open a document at launch
-    //   PAPERLANE_EVAL=<js>         run JS (top-level await allowed), print the result
     //   PAPERLANE_SNAPSHOT=<a.png>  write a PNG of the window
     //   PAPERLANE_DELAY=<seconds>   settle time before the two above (default 3)
     //   PAPERLANE_COMMAND=<name>    fire a menu command through the bridge
     //   PAPERLANE_QUIT=1            exit once they are done
-    //   PAPERLANE_INSPECT=1         enable the Web Inspector
+    //
+    // Each of those is equivalent to something a person can already do from the
+    // menus. The two that are not — running arbitrary JavaScript in the page
+    // (PAPERLANE_EVAL) and opening the Web Inspector (PAPERLANE_INSPECT) — are
+    // compiled into debug builds only, so the app you install carries no way to
+    // execute code inside it.
 
     private func runDebugHooks() {
         let env = ProcessInfo.processInfo.environment
         if let path = env["PAPERLANE_OPEN"] {
             deliver(URL(fileURLWithPath: path), purpose: "open")
         }
-        guard env["PAPERLANE_EVAL"] != nil || env["PAPERLANE_SNAPSHOT"] != nil
-                || env["PAPERLANE_COMMAND"] != nil else { return }
+        var wanted = env["PAPERLANE_SNAPSHOT"] != nil || env["PAPERLANE_COMMAND"] != nil
+        #if DEBUG
+        wanted = wanted || env["PAPERLANE_EVAL"] != nil
+        #endif
+        guard wanted else { return }
         let delay = Double(env["PAPERLANE_DELAY"] ?? "") ?? 3
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             self?.evaluateThenSnapshot(env)
@@ -332,6 +368,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
 
     private func evaluateThenSnapshot(_ env: [String: String]) {
         if let command = env["PAPERLANE_COMMAND"] { send(command: command) }
+        #if !DEBUG
+        // give a fired command time to land before capturing
+        let settle = Double(env["PAPERLANE_DELAY2"] ?? "") ?? 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + settle) { [weak self] in
+            self?.snapshot(env)
+        }
+        return
+        #else
         guard let script = env["PAPERLANE_EVAL"] else { return snapshot(env) }
         webView.callAsyncJavaScript(script, arguments: [:], in: nil,
                                     in: .page) { [weak self] result in
@@ -349,6 +393,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 self?.snapshot(env)
             }
         }
+        #endif
     }
 
     private func snapshot(_ env: [String: String]) {

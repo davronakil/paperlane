@@ -30,7 +30,7 @@ const col = (hex: string) => {
 };
 
 /** Greedy word wrap that also honours explicit newlines. */
-export function wrapText(
+function wrapText(
   text: string,
   font: PDFFont | { widthOfTextAtSize: (t: string, s: number) => number },
   size: number,

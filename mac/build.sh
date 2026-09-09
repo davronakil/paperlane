@@ -27,7 +27,7 @@ rm -rf "$ICONSET"
 echo "==> Compiling the shell ($CONFIG)"
 ARCH="$(uname -m)"
 SWIFT_FLAGS=(-target "${ARCH}-apple-macosx13.0" -framework AppKit -framework WebKit -framework PDFKit -framework Network)
-if [ "$CONFIG" = "debug" ]; then SWIFT_FLAGS+=(-Onone -g); else SWIFT_FLAGS+=(-O); fi
+if [ "$CONFIG" = "debug" ]; then SWIFT_FLAGS+=(-Onone -g -D DEBUG); else SWIFT_FLAGS+=(-O); fi
 swiftc "${SWIFT_FLAGS[@]}" mac/Sources/*.swift -o "$APP/Contents/MacOS/Paperlane"
 
 echo "==> Signing (ad-hoc)"

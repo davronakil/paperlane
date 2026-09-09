@@ -14,8 +14,13 @@ final class StaticServer {
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "paperlane.http")
 
+    /// Bound port, known once `start()` returns; used to validate Host headers.
+    private var boundPort: UInt16 = 0
+
     init(root: URL) {
-        self.root = root.standardizedFileURL
+        // Resolve symlinks as well as `..`, so the containment check below
+        // cannot be walked out of by a link inside the served directory.
+        self.root = root.resolvingSymlinksInPath().standardizedFileURL
         var raw = [UInt8](repeating: 0, count: 16)
         _ = SecRandomCopyBytes(kSecRandomDefault, raw.count, &raw)
         self.token = raw.map { String(format: "%02x", $0) }.joined()
@@ -43,6 +48,9 @@ final class StaticServer {
         }
         listener.newConnectionHandler = { [weak self] connection in
             connection.start(queue: self?.queue ?? .global())
+            // Don't let a client hold a connection open by never finishing its
+            // request; the interface's own requests complete immediately.
+            self?.queue.asyncAfter(deadline: .now() + 15) { connection.cancel() }
             self?.receive(on: connection, buffer: Data())
         }
         listener.start(queue: queue)
@@ -52,6 +60,7 @@ final class StaticServer {
         }
         if let failure { throw failure }
         guard let port = listener.port?.rawValue else { throw ServerError.noPort }
+        boundPort = port
         return URL(string: "http://127.0.0.1:\(port)/\(token)/index.html")!
     }
 
@@ -103,6 +112,18 @@ final class StaticServer {
                         type: "text/plain", on: connection)
         }
 
+        // Reject anything not addressed to the loopback origin we handed the
+        // web view. Cheap insurance against a browser elsewhere on the machine
+        // being pointed at this port by a rebound hostname.
+        let headers = head.split(separator: "\r\n").dropFirst()
+        let host = headers.first { $0.lowercased().hasPrefix("host:") }?
+            .dropFirst(5).trimmingCharacters(in: .whitespaces)
+        let expected = ["127.0.0.1:\(boundPort)", "localhost:\(boundPort)"]
+        guard let host, expected.contains(host) else {
+            return send(status: "403 Forbidden", body: Data("forbidden".utf8),
+                        type: "text/plain", on: connection)
+        }
+
         var path = String(parts[1])
         if let q = path.firstIndex(of: "?") { path = String(path[..<q]) }
         path = path.removingPercentEncoding ?? path
@@ -116,7 +137,8 @@ final class StaticServer {
         var relative = String(path.dropFirst(prefix.count))
         if relative.isEmpty { relative = "index.html" }
 
-        let target = root.appendingPathComponent(relative).standardizedFileURL
+        let target = root.appendingPathComponent(relative)
+            .resolvingSymlinksInPath().standardizedFileURL
         guard target.path == root.path || target.path.hasPrefix(root.path + "/"),
               let data = try? Data(contentsOf: target)
         else {
