@@ -8,7 +8,9 @@ DEST="/Applications/Paperlane.app"
 
 [ -d "$SRC" ] || { echo "No build found — run 'npm run app' first."; exit 1; }
 
+WAS_RUNNING=0
 if pgrep -f "Paperlane.app/Contents/MacOS/Paperlane" > /dev/null; then
+  WAS_RUNNING=1
   echo "==> Quitting the running copy"
   osascript -e 'quit app "Paperlane"' 2>/dev/null || true
   sleep 1
@@ -25,4 +27,10 @@ xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 [ -x "$LSREGISTER" ] && "$LSREGISTER" -f "$DEST"
 
-echo "Installed. Open it with:  open -a Paperlane"
+if [ "$WAS_RUNNING" = "1" ]; then
+  echo "==> Reopening"
+  open -a "$DEST"
+  echo "Installed and reopened."
+else
+  echo "Installed. Open it with:  open -a Paperlane"
+fi
