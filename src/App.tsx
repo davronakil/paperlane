@@ -37,6 +37,7 @@ export default function App() {
   const [extractOpen, setExtractOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [blockedByEncryption, setBlockedByEncryption] = useState(false);
   const [dropOver, setDropOver] = useState(false);
   const [pageBox, setPageBox] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
@@ -114,8 +115,20 @@ export default function App() {
   };
 
   // ---- saving -----------------------------------------------------------
+  /** pdf-lib cannot re-encrypt, so edits written into a protected PDF are
+   *  silently dropped by any reader. Refuse rather than hand back a file that
+   *  looks right and has lost the work. */
+  const encryptionWouldLoseWork = () => {
+    if (s.encrypted && s.dirty) {
+      setBlockedByEncryption(true);
+      setMenuOpen(false);
+      return true;
+    }
+    return false;
+  };
+
   const save = async (flatten: boolean) => {
-    if (!s.bytes) return;
+    if (!s.bytes || encryptionWouldLoseWork()) return;
     setBusy(true);
     try {
       const out = await buildPdf(s.bytes, {
@@ -144,7 +157,7 @@ export default function App() {
   };
 
   const print = async () => {
-    if (!s.bytes) return;
+    if (!s.bytes || encryptionWouldLoseWork()) return;
     setBusy(true);
     try {
       const out = await buildPdf(s.bytes, {
@@ -184,7 +197,7 @@ export default function App() {
   };
 
   const doMerge = async (incoming: ArrayBuffer, label: string) => {
-    if (!s.bytes) return;
+    if (!s.bytes || encryptionWouldLoseWork()) return;
     setBusy(true);
     try {
       const current = await buildPdf(s.bytes, {
@@ -661,6 +674,39 @@ export default function App() {
         </div>
       )}
 
+      {blockedByEncryption && (
+        <div className="backdrop" onMouseDown={() => setBlockedByEncryption(false)}>
+          <div
+            className="modal"
+            style={{ width: 440 }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>This PDF is password protected</h2>
+            </div>
+            <div className="modal-body" style={{ color: 'var(--text-2)' }}>
+              <p style={{ marginTop: 0 }}>
+                Paperlane can read and fill a protected PDF, but it cannot write
+                changes back into one — the encryption cannot be reapplied, so
+                every annotation and form entry would be missing from the saved
+                file without any sign that it had gone.
+              </p>
+              <p style={{ marginBottom: 0 }}>
+                Remove the password from the original first, then reopen it here.
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button
+                className="btn primary"
+                onClick={() => setBlockedByEncryption(false)}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {extractOpen && <ExtractModal onClose={() => setExtractOpen(false)} />}
       {sigModal && <SignatureModal kind={sigModal} onClose={() => setSigModal(null)} />}
 
@@ -695,6 +741,11 @@ function ExtractModal({ onClose }: { onClose: () => void }) {
 
   const run = async () => {
     if (!s.bytes || !indices.length) return;
+    if (s.encrypted && s.dirty) {
+      s.notify('A protected PDF cannot be written back — remove the password first.');
+      onClose();
+      return;
+    }
     setBusy(true);
     try {
       const current = await buildPdf(s.bytes, {
@@ -709,8 +760,12 @@ function ExtractModal({ onClose }: { onClose: () => void }) {
         .map((i) => kept.findIndex((k) => k.index === i))
         .filter((i) => i >= 0);
       const out = await extractPages(current.slice().buffer as ArrayBuffer, map);
-      downloadBlob(out, `${s.fileName.replace(/\.pdf$/i, '')} (pages ${spec}).pdf`);
-      s.notify('Extracted.');
+      const name = `${s.fileName.replace(/\.pdf$/i, '')} (pages ${spec}).pdf`;
+      if (isNative) native.save(out, name);
+      else {
+        downloadBlob(out, name);
+        s.notify('Extracted.');
+      }
       onClose();
     } catch {
       s.notify('Could not extract those pages.');

@@ -289,6 +289,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         runDebugHooks()
     }
 
+    /// The interface lives entirely in the web process, so if it dies the
+    /// document goes with it. Reload rather than leaving a blank window, and
+    /// say so plainly instead of letting the work disappear silently.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        webReady = false
+        documentEdited = false
+        documentURL = nil
+        window.isDocumentEdited = false
+        window.representedURL = nil
+        window.title = "Paperlane"
+        webView.reload()
+        presentInfo("Paperlane ran out of memory and restarted. "
+                    + "Any unsaved annotations or form entries were lost.")
+    }
+
     // MARK: - debug hooks
     //
     // Driven entirely by environment variables, so they are inert unless you

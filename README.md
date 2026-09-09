@@ -135,12 +135,21 @@ so their contents stay upright and correctly oriented on rotated pages.
   assets`, which `dev` and `build` chain explicitly (npm's implicit `pre*`
   hooks are skipped when `ignore-scripts` is set), and the "Type" signature tab uses the script faces that ship with macOS,
   so nothing is ever fetched over the network.
-- Encrypted PDFs open with a password prompt.
+- Encrypted PDFs open with a password prompt and can be read, searched and
+  filled in, but **not saved**. `pdf-lib` cannot reapply encryption, so anything
+  written into a protected file is plaintext inside a document that declares
+  itself encrypted — every reader then renders the additions as nothing. The
+  saved file would look untouched while quietly missing the work, so Paperlane
+  refuses instead, and says why. Remove the password from the original first.
 - Inserting another PDF copies its pages but not its interactive form fields —
   a `pdf-lib` limitation. Fill that document before inserting it, or flatten it.
 - Editing the *existing* text of a page is not supported — the app adds content
   on top rather than reflowing the original. Text boxes, redaction-style filled
   rectangles and page surgery cover most of what that is used for.
+- Page bitmaps and pdf.js's per-page caches are released as pages leave the
+  render window, so memory plateaus rather than growing with how far you have
+  scrolled: a 400-page document settles around 520 MB and stays there across
+  repeated passes. Without that it reached 1.4 GB and took the web process down.
 - Everything runs on the main thread except pdf.js rendering; very large
   documents (1000+ pages) will feel it in the thumbnail sidebar.
 

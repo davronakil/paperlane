@@ -39,6 +39,8 @@ interface State {
   loading: boolean;
   error: string | null;
   needsPassword: boolean;
+  /** the source file carries an /Encrypt dictionary */
+  encrypted: boolean;
 
   // editable model ------------------------------------------------------
   annos: Anno[];
@@ -129,6 +131,7 @@ export const useStore = create<State>((set, get) => ({
   loading: false,
   error: null,
   needsPassword: false,
+  encrypted: false,
 
   annos: [],
   fields: [],
@@ -181,8 +184,10 @@ export const useStore = create<State>((set, get) => ({
       const pdf = await loadPdf(bytes, password);
       let fields: FormField[] = [];
       let values: Record<string, string> = {};
+      let encrypted = false;
       try {
         const lib = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        encrypted = lib.isEncrypted;
         fields = readFormFields(lib);
         for (const f of fields) {
           if (values[f.name] === undefined) values[f.name] = f.value;
@@ -197,6 +202,7 @@ export const useStore = create<State>((set, get) => ({
       }));
       set({
         docId: get().docId + 1,
+        encrypted,
         bytes,
         pdf,
         fileName: name,
@@ -241,6 +247,7 @@ export const useStore = create<State>((set, get) => ({
       dirty: false,
       error: null,
       needsPassword: false,
+      encrypted: false,
       searchHits: [],
       searchQuery: '',
     }),

@@ -161,6 +161,28 @@ export function Page({
     return () => task.cancel();
   }, [page, geom, near]);
 
+  // A rendered page holds a full-resolution bitmap — roughly 19 MB at fit-width
+  // on a Retina display. Keeping every page that has ever scrolled past would
+  // grow without bound and eventually take the web process down, so drop the
+  // backing store as soon as a page leaves the render window. The element keeps
+  // its CSS size, so layout and scroll position are untouched, and the effect
+  // above repaints it if the page comes back.
+  useEffect(() => {
+    if (near) return;
+    const canvas = canvasRef.current;
+    if (canvas && canvas.width > 0) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+    // pdf.js also caches the page's parsed operator list and fonts after a
+    // render; without this a long document keeps every page it has shown.
+    try {
+      page?.cleanup();
+    } catch {
+      /* a render was still settling — it will be cleaned up next time */
+    }
+  }, [near, page]);
+
   // ---- text layer -------------------------------------------------------
   useEffect(() => {
     if (!page || !geom || !near) return;
