@@ -16,6 +16,7 @@ import {
   IcSign,
   IcStrike,
   IcText,
+  IcTextEdit,
   IcTrash,
   IcUnderline,
 } from './Icons';
@@ -41,6 +42,7 @@ const TOOLS: { id: Tool; icon: React.ReactElement; title: string; key?: string }
   { id: 'ink', icon: <IcPen />, title: 'Draw', key: 'D' },
   { id: 'eraser', icon: <IcEraser />, title: 'Erase annotations', key: 'E' },
   { id: 'text', icon: <IcText />, title: 'Add text', key: 'T' },
+  { id: 'edittext', icon: <IcTextEdit />, title: 'Edit existing text', key: 'X' },
   { id: 'note', icon: <IcNote />, title: 'Sticky note', key: 'N' },
   { id: 'rect', icon: <IcRect />, title: 'Rectangle', key: 'R' },
   { id: 'ellipse', icon: <IcEllipse />, title: 'Ellipse', key: 'O' },

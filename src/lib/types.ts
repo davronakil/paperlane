@@ -18,7 +18,8 @@ export type Tool =
   | 'line'
   | 'arrow'
   | 'signature'
-  | 'image';
+  | 'image'
+  | 'edittext';
 
 export interface BaseAnno {
   id: string;

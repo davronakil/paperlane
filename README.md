@@ -37,6 +37,14 @@ fillable PDF — or flatten it to bake the values into the page.
 face, or upload an image. Signatures are stored locally for reuse, then placed,
 dragged and resized anywhere on a page.
 
+**Edit the text that is already there** — not a text box placed on top: the
+words baked into the page are rewritten in the file itself. Pick the *Edit
+existing text* tool, click a line, retype it. Where the page's own font can
+spell the new text it is used, so the result is indistinguishable from the
+original; where it cannot, the line is redrawn in a metric-matched stand-in.
+Either way the old text is removed from the content stream, not painted over —
+it cannot be selected, searched or recovered afterwards.
+
 **Mark up** — highlight, underline and strike through real text (driven by the
 text layer, so the boxes follow the glyphs), freehand pen, sticky notes, text
 boxes with font/size/alignment, rectangles, ellipses, lines and arrows, plus an
@@ -116,6 +124,7 @@ debug builds — use `npm run app:debug` when you need them.
 | `src/lib/forms.ts` | AcroForm widget discovery and write-back |
 | `src/lib/export.ts` | drawing annotations into the file, merge, extract |
 | `src/lib/search.ts` | full-text index and hit rectangles |
+| `src/lib/textedit/` | rewriting the text a page already draws (see below) |
 | `src/state/store.ts` | document model, annotations, undo history |
 | `src/components/Page.tsx` | canvas, text layer, and all page interaction |
 | `src/lib/native.ts` | the bridge to the shell (inert in a browser) |
@@ -131,6 +140,48 @@ lands in the same spot in the exported file.
 DOM overlays (form fields, text boxes, signatures) live in a `.pdf-space`
 container that is sized to the *unrotated* page and CSS-rotated onto the canvas,
 so their contents stay upright and correctly oriented on rotated pages.
+
+## Editing existing text
+
+PDF has no notion of a paragraph. A page is a list of drawing operators, and a
+line of prose is usually one `Tj` or `TJ` showing bytes in whatever encoding
+its font happens to use. Editing that text means finding the operator
+responsible and rewriting it.
+
+`src/lib/textedit/` does exactly that:
+
+| | |
+|---|---|
+| `tokenizer.ts` | walks the content stream and records each operator's byte span — including skipping inline image payloads, which would otherwise parse as garbage |
+| `fonts.ts` | reads a font well enough to go both ways: `/ToUnicode` CMaps, `/Encoding` with `/Differences`, WinAnsi, CID widths, and the AFM tables for the standard 14 (which ship with no `/Widths` at all) |
+| `scan.ts` | replays the graphics and text state — `cm`, `q/Q`, `Tm/Td/TD/T*`, `Tf`, `Tc/Tw/Tz/Ts`, fill colour — to place every run on the page and measure it |
+| `apply.ts` | splices replacement operators into the stream |
+
+Measured runs agree with pdf.js to the decimal place, which is what lets the
+edit box sit exactly on the text.
+
+Three things can happen when you retype a line:
+
+1. **The page's own font can spell it.** The string is re-encoded through the
+   font's own mapping and the operator is replaced. The result is the original
+   typeface, unchanged.
+2. **It cannot** — subset fonts only carry the glyphs the document already
+   used, so a new letter may simply not exist. The run is removed and redrawn
+   in a stand-in matched on serif/fixed/bold/italic, at the same size, colour
+   and position.
+3. **Nothing available can draw it** — typing Japanese into a Latin subset, for
+   instance. The edit is refused and the original text is left exactly as it
+   was, because deleting a line and failing to replace it is worse than not
+   editing it.
+
+### What it will not do
+
+Each run is edited on its own; there is no reflow. Make a line longer and it
+grows to the right rather than pushing words onto the next line, so it can run
+into whatever sits beside it. Text drawn inside a Form XObject, and text set at
+an angle, are shown but not offered for editing. Rewriting a paragraph as a
+paragraph would mean reconstructing the original line-breaking decisions, which
+is a much larger problem than this solves.
 
 ## Security
 
@@ -190,9 +241,6 @@ so it runs only on the machine that built it.
   refuses instead, and says why. Remove the password from the original first.
 - Inserting another PDF copies its pages but not its interactive form fields —
   a `pdf-lib` limitation. Fill that document before inserting it, or flatten it.
-- Editing the *existing* text of a page is not supported — the app adds content
-  on top rather than reflowing the original. Text boxes, redaction-style filled
-  rectangles and page surgery cover most of what that is used for.
 - Page bitmaps and pdf.js's per-page caches are released as pages leave the
   render window, so memory plateaus rather than growing with how far you have
   scrolled: a 400-page document settles around 520 MB and stays there across

@@ -6,7 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { Viewer } from './components/Viewer';
 import { Welcome } from './components/Welcome';
 import { SignatureModal } from './components/SignatureModal';
-import { buildPdf, extractPages, mergePdfs } from './lib/export';
+import { buildPdf, extractPages, lastTextEditResult, mergePdfs } from './lib/export';
 import { fontSizeMap } from './lib/forms';
 import { downloadBlob, formatBytes } from './lib/util';
 import { base64ToBytes, isNative, native, registerNativeHost } from './lib/native';
@@ -135,9 +135,16 @@ export default function App() {
         annos: s.annos,
         formValues: s.formValues,
         fieldFontSizes: fontSizeMap(s.fields),
+        textEdits: s.textEdits,
         pages: s.pages,
         flattenForm: flatten,
       });
+      if (lastTextEditResult.skipped.length) {
+        const n = lastTextEditResult.skipped.length;
+        s.notify(
+          `${n} text edit${n === 1 ? '' : 's'} could not be written — no available font can draw those characters. The original text was kept.`,
+        );
+      }
       const base = s.fileName.replace(/\.pdf$/i, '');
       const name = `${base}${flatten ? ' (flattened)' : ' (edited)'}.pdf`;
       if (isNative) {
@@ -164,6 +171,7 @@ export default function App() {
         annos: s.annos,
         formValues: s.formValues,
         fieldFontSizes: fontSizeMap(s.fields),
+        textEdits: s.textEdits,
         pages: s.pages,
         flattenForm: true,
       });
@@ -204,6 +212,7 @@ export default function App() {
         annos: s.annos,
         formValues: s.formValues,
         fieldFontSizes: fontSizeMap(s.fields),
+        textEdits: s.textEdits,
         pages: s.pages,
       });
       const merged = await mergePdfs(current.slice().buffer as ArrayBuffer, incoming);
@@ -387,6 +396,7 @@ export default function App() {
         d: 'ink',
         e: 'eraser',
         t: 'text',
+        x: 'edittext',
         n: 'note',
         r: 'rect',
         o: 'ellipse',
@@ -752,6 +762,7 @@ function ExtractModal({ onClose }: { onClose: () => void }) {
         annos: s.annos,
         formValues: s.formValues,
         fieldFontSizes: fontSizeMap(s.fields),
+        textEdits: s.textEdits,
         pages: s.pages,
       });
       // map original indices onto the surviving order

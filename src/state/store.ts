@@ -11,6 +11,7 @@ import type {
 import { loadPdf, type PDFDocumentProxy } from '../lib/pdfjs';
 import { readFormFields } from '../lib/forms';
 import { uid } from '../lib/util';
+import { forgetScans, type TextEdit } from '../lib/textedit';
 
 export interface StampAsset {
   id: string;
@@ -25,6 +26,7 @@ interface Snapshot {
   annos: Anno[];
   formValues: Record<string, string>;
   pages: PageState[];
+  textEdits: TextEdit[];
 }
 
 interface State {
@@ -47,6 +49,8 @@ interface State {
   fields: FormField[];
   formValues: Record<string, string>;
   pages: PageState[];
+  /** replacements for text baked into the page content */
+  textEdits: TextEdit[];
   dirty: boolean;
 
   // history -------------------------------------------------------------
@@ -89,6 +93,7 @@ interface State {
   removeAnno: (id: string) => void;
   setFieldValue: (name: string, value: string) => void;
   setPages: (pages: PageState[]) => void;
+  setTextEdit: (page: number, runId: number, text: string, original: string) => void;
   rotatePage: (index: number, delta: number) => void;
   deletePage: (index: number) => void;
   restorePage: (index: number) => void;
@@ -103,6 +108,7 @@ const snap = (s: State): Snapshot => ({
   annos: s.annos,
   formValues: s.formValues,
   pages: s.pages,
+  textEdits: s.textEdits,
 });
 
 const LS_STAMPS = 'paperlane.stamps';
@@ -137,6 +143,7 @@ export const useStore = create<State>((set, get) => ({
   fields: [],
   formValues: {},
   pages: [],
+  textEdits: [],
   dirty: false,
 
   past: [],
@@ -180,6 +187,7 @@ export const useStore = create<State>((set, get) => ({
 
   openBytes: async (bytes, name, password) => {
     set({ loading: true, error: null, needsPassword: false });
+    forgetScans();
     try {
       const pdf = await loadPdf(bytes, password);
       let fields: FormField[] = [];
@@ -212,6 +220,7 @@ export const useStore = create<State>((set, get) => ({
         fields,
         formValues: values,
         pages,
+        textEdits: [],
         past: [],
         future: [],
         dirty: false,
@@ -242,6 +251,7 @@ export const useStore = create<State>((set, get) => ({
       fields: [],
       formValues: {},
       pages: [],
+      textEdits: [],
       past: [],
       future: [],
       dirty: false,
@@ -286,6 +296,26 @@ export const useStore = create<State>((set, get) => ({
   setPages: (pages) => {
     get().commit();
     set({ pages, dirty: true });
+  },
+
+  /** Recording the original lets an edit that is typed back to its starting
+   *  text disappear instead of rewriting the page to what it already said. */
+  setTextEdit: (page, runId, text, original) => {
+    const existing = get().textEdits.find((e) => e.page === page && e.runId === runId);
+    const revert = text === original;
+    if (!existing && revert) return;
+    if (existing && existing.text === text) return;
+    get().commit();
+    set((s) => ({
+      textEdits: revert
+        ? s.textEdits.filter((e) => !(e.page === page && e.runId === runId))
+        : existing
+          ? s.textEdits.map((e) =>
+              e.page === page && e.runId === runId ? { ...e, text } : e,
+            )
+          : [...s.textEdits, { page, runId, text }],
+      dirty: true,
+    }));
   },
 
   rotatePage: (index, delta) => {

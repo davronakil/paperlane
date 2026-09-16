@@ -13,6 +13,7 @@ import { useStore } from '../state/store';
 import { AnnoSvg } from './AnnoSvg';
 import { BoxAnnos } from './BoxAnnos';
 import { FormLayer } from './FormLayer';
+import { TextEditLayer } from './TextEditLayer';
 import { uid } from '../lib/util';
 
 const DRAW_TOOLS = new Set(['ink', 'eraser', 'text', 'note', 'rect', 'ellipse', 'line', 'arrow']);
@@ -541,6 +542,12 @@ export function Page({
               {pageFields.length > 0 && (
                 <FormLayer fields={pageFields} geom={geom} />
               )}
+              <TextEditLayer
+                page={idx}
+                geom={geom}
+                canvas={canvasRef.current}
+                active={tool === 'edittext'}
+              />
               <BoxAnnos
                 annos={pageAnnos}
                 geom={geom}

@@ -12,6 +12,7 @@ import {
 import type { Anno, FontKey, PageState, TextAnno } from './types';
 import { hexToRgb } from './util';
 import { applyFormValues } from './forms';
+import { applyTextEdits, type TextEdit } from './textedit';
 
 const FONT_MAP: Record<FontKey, StandardFonts> = {
   Helvetica: StandardFonts.Helvetica,
@@ -62,6 +63,8 @@ export interface BuildOptions {
   formValues: Record<string, string>;
   /** field name -> font size, so saved text matches what was on screen */
   fieldFontSizes?: Record<string, number>;
+  /** rewrites of text baked into the page content */
+  textEdits?: TextEdit[];
   pages: PageState[];
   /** bake form fields into static page content */
   flattenForm?: boolean;
@@ -75,6 +78,13 @@ export async function buildPdf(
     ignoreEncryption: true,
     updateMetadata: false,
   });
+
+  // Text edits rewrite the page content stream wholesale, so they have to run
+  // before anything is drawn on top of it.
+  let textResult = { applied: 0, redrawn: 0, skipped: [] as string[] };
+  if (opts.textEdits?.length) {
+    textResult = await applyTextEdits(doc, opts.textEdits);
+  }
 
   applyFormValues(doc, opts.formValues, opts.fieldFontSizes);
 
@@ -139,8 +149,18 @@ export async function buildPdf(
   doc.setProducer('Paperlane');
   doc.setModificationDate(new Date());
 
-  return doc.save({ useObjectStreams: false });
+  const bytes = await doc.save({ useObjectStreams: false });
+  lastTextEditResult = textResult;
+  return bytes;
 }
+
+/** Details of the most recent build, so the UI can report edits it could not
+ *  make rather than letting them vanish silently. */
+export let lastTextEditResult: { applied: number; redrawn: number; skipped: string[] } = {
+  applied: 0,
+  redrawn: 0,
+  skipped: [],
+};
 
 async function drawAnno(
   doc: PDFDocument,

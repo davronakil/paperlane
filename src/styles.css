@@ -402,6 +402,31 @@ button { font: inherit; color: inherit; }
 }
 .note-pop-row { display: flex; gap: 6px; margin-top: 6px; }
 
+.text-run {
+  position: absolute;
+  border: 1px dashed transparent;
+  border-radius: 2px;
+  cursor: text;
+  white-space: pre;
+  overflow: visible;
+  padding: 0;
+  margin: 0;
+}
+.viewer.tool-edittext .text-run:hover {
+  border-color: var(--accent);
+  background: rgba(47, 107, 255, .08);
+}
+.text-run.edited {
+  border-color: rgba(47, 107, 255, .45);
+  border-style: solid;
+}
+.text-run.editing {
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 2px rgba(47, 107, 255, .25);
+  outline: none;
+}
+.viewer.tool-edittext .textLayer { pointer-events: none; }
+
 /* form fields */
 .field {
   position: absolute;

@@ -62,6 +62,13 @@ export const IcText = S(
     <path d="M12 4v16M9 20h6" />
   </>,
 );
+export const IcTextEdit = S(
+  <>
+    <path d="M4 7V5h11v2" />
+    <path d="M9.5 5v11M7 16h5" />
+    <path d="M14.5 20.5l6-6 2.2 2.2-6 6H14.5z" />
+  </>,
+);
 export const IcNote = S(
   <>
     <path d="M4 5h16v10H9l-5 4z" />

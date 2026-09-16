@@ -243,6 +243,7 @@ export function Viewer() {
     panning ? 'panning' : '',
     MARKUP_TOOLS.has(tool) || tool === 'select' ? '' : 'no-select',
     tool === 'text' ? 'tool-text' : '',
+    tool === 'edittext' ? 'tool-edittext' : '',
   ]
     .filter(Boolean)
     .join(' ');
