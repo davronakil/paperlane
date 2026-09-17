@@ -5,21 +5,81 @@ native macOS app. The PDF is read with `pdf.js`, edited in memory, and written
 back out with `pdf-lib` — all on your own machine. No account, no upload, and
 no network access at all once it is built.
 
+## Install it on your Mac
+
+Get the files, then run one command. It takes a couple of minutes the first
+time, and you do not need to understand any of it.
+
+### 1. Get the files
+
+**Without the Terminal:** click the green **Code** button at the top of
+[this page](https://github.com/davronakil/paperlane) → **Download ZIP**, then
+double-click the downloaded file to unzip it. You will get a folder called
+`paperlane-main`, probably in your Downloads.
+
+**Or in the Terminal:**
+
 ```bash
-npm install
-npm run app      # builds build/Paperlane.app  (~5 MB)
-open build/Paperlane.app
+git clone https://github.com/davronakil/paperlane.git
 ```
 
-To keep it around, drag `Paperlane.app` into `/Applications`. macOS then offers
-it under **Open With** for any PDF, and double-clicking a PDF opens it here.
+### 2. Run the installer
 
-It also still runs as a plain web app, which is the quicker loop when working on
-the interface:
+Open **Terminal** (press ⌘-Space, type `Terminal`, hit return). Type `cd`
+followed by a space, then **drag the folder onto the Terminal window** — that
+fills in the path for you — and press return:
 
 ```bash
+cd ~/Downloads/paperlane-main     # or wherever the folder ended up
+./install.sh
+```
+
+That's it. Paperlane will open when it finishes, and from then on it lives in
+your Applications folder, shows up in Spotlight, and appears under **Open With**
+for any PDF.
+
+### If it stops and asks for something
+
+The installer checks everything up front and prints the exact command to fix
+whatever is missing. There are only three possibilities:
+
+| It says | Run this, then `./install.sh` again |
+|---|---|
+| developer tools are not installed | `xcode-select --install` — click Install in the window that appears and wait for it to finish |
+| Xcode's licence has not been accepted | `sudo xcodebuild -license accept` — it will ask for your Mac password |
+| Node.js is not installed | install the **LTS** version from [nodejs.org](https://nodejs.org), or `brew install node` |
+
+The developer tools are a one-time download of about 1.5 GB. The full Xcode
+app, which is many times larger, is **not** needed.
+
+### Updating later
+
+```bash
+cd ~/Downloads/paperlane-main
+git pull        # or download the ZIP again
+./install.sh
+```
+
+### Why there is no ready-made download
+
+The app is signed ad-hoc, which means it is trusted on the machine that built
+it and nowhere else. Handing out a prebuilt copy would mean either paying for
+an Apple Developer ID and notarising it, or telling you to switch off the check
+that stops unidentified apps from running — and that is not advice worth
+giving. Building it yourself takes a couple of minutes and sidesteps the whole
+problem.
+
+## Working on it
+
+The interface also runs as a plain web app, which is a much quicker loop than
+rebuilding the shell:
+
+```bash
+npm install
 npm run dev      # http://localhost:5173
 npm run build    # static bundle in dist/
+npm run app      # just the .app, without installing it
+npm run fixtures # regenerate the test PDFs
 ```
 
 ## What it does
